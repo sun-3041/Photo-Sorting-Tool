@@ -8,6 +8,7 @@ from photo_selector import (
     discover_images,
     export_destination_matches_source_folder,
     export_image,
+    export_stem,
     natural_sort_key,
     prepare_for_export,
     unique_output_path,
@@ -38,6 +39,13 @@ class PhotoSelectorTests(unittest.TestCase):
             (root / "photo.jpg").write_bytes(b"existing")
             (root / "photo_2.jpg").write_bytes(b"existing")
             self.assertEqual(unique_output_path(root, "photo", ".jpg").name, "photo_3.jpg")
+
+    def test_export_stem_supports_original_and_sequence_names(self) -> None:
+        source = Path("holiday-photo.jpg")
+        self.assertEqual(export_stem(source, 1, "保留原文件名"), "holiday-photo")
+        self.assertEqual(export_stem(source, 1, "顺序编号 001..."), "001")
+        self.assertEqual(export_stem(source, 12, "顺序编号 001..."), "012")
+        self.assertEqual(export_stem(source, 1000, "顺序编号 001..."), "1000")
 
     def test_export_destination_cannot_be_source_folder(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

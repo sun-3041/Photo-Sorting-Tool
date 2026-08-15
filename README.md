@@ -29,16 +29,18 @@ A **local-only** Windows photo filtering tool. Import hundreds or thousands of p
 
 - **快如键盘**：`←`/`→` 翻页，`↑`/`↓`/`空格` 标记，全程无需鼠标
 - **大图体验**：鼠标滚轮缩放、按住拖动平移、双击恢复、`F11` 全屏
+- **顺滑切图**：后台解码并预加载相邻图片，使用有限内存缓存减少连续切换等待
 - **批量管理**：递归导入文件夹，左侧缩略图列表，已选图片橙色高亮
-- **灵活导出**：支持保持原格式 / JPEG / PNG / WebP / TIFF / BMP，可调输出质量
+- **灵活导出**：支持保持原格式 / JPEG / PNG / WebP / TIFF / BMP，可调质量，并可保留原文件名或按 `001`、`002`…编号
 - **导出前复核**：先预览已选图片，`↓` 一键移除不满意的再确认
 - **格式广泛**：Pillow 全系格式，可选扩展 HEIC/HEIF 与相机 RAW（DNG、CR2/CR3、NEF 等）
 - **绝对安全**：只读取原图，导出到独立目录，绝不移动、覆盖或修改原图
 
 - **Keyboard-fast**: `←`/`→` to browse, `↑`/`↓`/`Space` to mark — mouse-free workflow
 - **Large-image experience**: scroll to zoom, drag to pan, double-click to reset, `F11` full-screen
+- **Smooth browsing**: background decoding, adjacent-image preloading, and a bounded memory cache reduce navigation delays
 - **Batch management**: recursive folder import, thumbnail sidebar, selected shots highlighted in orange
-- **Flexible export**: keep original format or convert to JPEG / PNG / WebP / TIFF / BMP with quality control
+- **Flexible export**: keep original format or convert to JPEG / PNG / WebP / TIFF / BMP, adjust quality, and keep original names or number files as `001`, `002`, …
 - **Review before export**: preview your picks and remove any with a single `↓`
 - **Broad format support**: the full Pillow family, plus optional HEIC/HEIF and camera RAW (DNG, CR2/CR3, NEF, …)
 - **Absolutely safe**: source images are only read; exports go to a separate folder — never moved, overwritten, or modified
@@ -53,7 +55,7 @@ A **local-only** Windows photo filtering tool. Import hundreds or thousands of p
 | 区域 Area | 说明 Description |
 |------|------|
 | ① 工具栏 Toolbar | 导入图片 / 导入文件夹、清除列表、选择导出格式、开始导出 — Import files / folder, clear, choose export format, start export |
-| ② 质量与计数 Quality & counter | 调节 JPEG / WebP 输出质量，查看浏览进度与已选数量 — JPEG/WebP quality, progress and selection counter |
+| ② 导出设置与计数 Export settings & counter | 调节 JPEG / WebP 输出质量，选择原文件名或顺序编号，查看已选数量 — JPEG/WebP quality, original/sequential naming, and selection counter |
 | ③ 图片列表 Image list | 所有已导入图片，点击跳转，缩略图预览，已选橙色高亮 — All imported images, click to jump, thumbnails, selected highlighted |
 | ④ 查看器 Viewer | 大图浏览区，滚轮缩放、拖动平移、双击恢复 — Large preview, scroll zoom, drag pan, double-click to fit |
 | ⑤ 控制按钮 Controls | 上一张 / 标记为已选 / 下一张 / 全屏查看 / 适合窗口 — Prev / Mark / Next / Full-screen / Fit |
@@ -105,8 +107,9 @@ Installs `pillow-heif` (HEIC/HEIF/AVIF) and `rawpy` (camera RAW).
 
 ### 1. 导入图片 Import images
 
-- 点击工具栏「**导入图片**」选择多个文件，或按 `Ctrl+O` — Click **Import Files** in the toolbar, or press `Ctrl+O`
-- 点击「**导入文件夹**」递归导入文件夹及子文件夹内全部图片，或按 `Ctrl+Shift+O` — Click **Import Folder** to import recursively, or press `Ctrl+Shift+O`
+- 点击工具栏「**导入图片**」选择多个文件，或按 `Ctrl+o` — Click **Import Files** in the toolbar, or press `Ctrl+o`
+- 点击「**导入文件夹**」递归导入文件夹及子文件夹内全部图片，或按 `Ctrl+Shift+o` — Click **Import Folder** to import recursively, or press `Ctrl+Shift+o`
+- 字母 `o` 不区分大小写；程序根据是否按住 `Shift` 区分导入图片和导入文件夹 — Letter `o` is case-insensitive; holding `Shift` selects folder import
 
 ### 2. 浏览照片 Browse photos
 
@@ -123,6 +126,7 @@ Installs `pillow-heif` (HEIC/HEIF/AVIF) and `rawpy` (camera RAW).
 ### 4. 设置格式与质量并导出 Set format & quality, then export
 
 - 工具栏选择**导出格式**（保持原格式 / JPEG / PNG / WebP / TIFF / BMP）— Choose the **export format** in the toolbar
+- 在“命名方式”中选择**保留原文件名**或**顺序编号 001...**；编号顺序与复核列表一致 — Choose **Keep original filename** or **Sequential 001...**; numbering follows the review-list order
 - 「输出质量」滑条调节 JPEG / WebP 压缩质量（1–100，默认 92）— Adjust JPEG/WebP **quality** with the slider (1–100, default 92)
 - 点击「**导出已选**」或按 `Ctrl+E` 进入复核 — Click **Export Selected** or press `Ctrl+E` to review
 
@@ -149,8 +153,8 @@ Installs `pillow-heif` (HEIC/HEIF/AVIF) and `rawpy` (camera RAW).
 | `Home` | 跳转到第一张 First image |
 | `End` | 跳转到最后一张 Last image |
 | `Esc` | 普通窗口：恢复适合窗口；全屏：退出全屏 Fit window / exit full-screen |
-| `Ctrl+O` | 导入图片 Import files |
-| `Ctrl+Shift+O` | 导入文件夹 Import folder |
+| `Ctrl+o` | 导入图片（`o` 不区分大小写） Import files (`o` is case-insensitive) |
+| `Ctrl+Shift+o` | 导入文件夹（`o` 不区分大小写） Import folder (`o` is case-insensitive) |
 | `Ctrl+E` | 导出已选（进入复核） Export selected (enter review) |
 | `F11` | 切换全屏查看 Toggle full-screen |
 
@@ -184,7 +188,15 @@ JPEG/JFIF, PNG, WebP, AVIF, TIFF, BMP, GIF, ICO, PSD, PNM/PPM/PBM/PGM, PCX, QOI,
 
 - **原图安全 Source safety**：程序只会复制或转换到单独目录，绝不会移动、覆盖或修改原图 — only copies/converts to a separate folder; never moves, overwrites, or modifies originals
 - **防覆盖 No overwrite**：导出时不会覆盖已有文件；同名文件自动追加 `_2`、`_3` 等编号 — existing files are never overwritten; duplicates get `_2`, `_3`, … suffixes
+- **命名方式 Naming**：可保留原文件名，或按已选图片顺序命名为 `001`、`002`、`003`… — keep original filenames or number selected images as `001`, `002`, `003`, …
 - **目录限制 Destination rule**：导出目录不能与任一原图所在目录相同，防止误操作 — the destination cannot equal any source folder
+
+---
+
+## ⚡ 性能与缓存 Performance and Cache
+
+- 图片切换缓存只存放在内存中，最多保留 3 张、约 128 MB；清空列表或关闭程序后会自动释放，不会在磁盘中生成图片缓存文件。
+- The browsing cache is memory-only, limited to 3 images and about 128 MB. It is released when the list is cleared or the app closes; no image cache files are written to disk.
 
 ---
 

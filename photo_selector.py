@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ctypes
+from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor
 import math
 import os
 import queue
@@ -74,6 +76,11 @@ EXPORT_FORMATS = {
     "TIFF": (".tif", "TIFF"),
     "BMP": (".bmp", "BMP"),
 }
+
+EXPORT_NAMING_MODES = (
+    "保留原文件名",
+    "顺序编号 001...",
+)
 
 COLORS = {
     "window": "#eef0f3",
@@ -201,6 +208,12 @@ def unique_output_path(folder: Path, stem: str, suffix: str) -> Path:
     return candidate
 
 
+def export_stem(source: Path, index: int, naming_mode: str) -> str:
+    if naming_mode == "顺序编号 001...":
+        return f"{index:03d}"
+    return source.stem
+
+
 def export_destination_matches_source_folder(destination: Path, sources: Iterable[Path]) -> bool:
     return any(path_key(destination) == path_key(source.parent) for source in sources)
 
@@ -276,6 +289,9 @@ class ExportProgressDialog(tk.Toplevel):
 class PhotoSelectorApp:
     MIN_SCALE = 0.02
     MAX_SCALE = 16.0
+    IMAGE_CACHE_ITEMS = 3
+    IMAGE_CACHE_BYTES = 128 * 1024 * 1024
+    SHIFT_MASK = 0x0001
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -298,6 +314,7 @@ class PhotoSelectorApp:
         self.is_fullscreen = False
         self._interactive_render_job: str | None = None
         self._quality_render_job: str | None = None
+        self._fit_render_job: str | None = None
         self.drag_start: tuple[int, int, float, float] | None = None
         self.export_directory: Path | None = None
         self._tree_syncing = False
@@ -305,8 +322,18 @@ class PhotoSelectorApp:
         self._export_queue: queue.Queue[tuple] | None = None
         self._export_dialog: ExportProgressDialog | None = None
         self._export_cancel: threading.Event | None = None
+        self._option_focus_job: str | None = None
+        self._image_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="photo-decode")
+        self._image_cache: OrderedDict[str, Image.Image] = OrderedDict()
+        self._image_cache_bytes = 0
+        self._image_cache_lock = threading.RLock()
+        self._pending_image_loads: dict[str, Future[Image.Image]] = {}
+        self._image_load_generation = 0
+        self._image_queue: queue.Queue[tuple] = queue.Queue()
+        self._image_poll_job: str | None = None
 
         self.export_format = tk.StringVar(value="JPEG")
+        self.export_naming = tk.StringVar(value=EXPORT_NAMING_MODES[0])
         self.export_quality = tk.IntVar(value=92)
         self.counter_text = tk.StringVar(value="0 张图片 · 已选 0 张")
         self.image_info_text = tk.StringVar(value="未载入图片")
@@ -314,6 +341,8 @@ class PhotoSelectorApp:
         self._configure_styles()
         self._build_ui()
         self._bind_events()
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self._image_poll_job = self.root.after(30, self._poll_image_queue)
         self._update_actions()
         self.root.after_idle(self._draw_empty_state)
 
@@ -448,6 +477,7 @@ class PhotoSelectorApp:
         )
         self.format_combo.pack(side="left", padx=(0, 8))
         self.format_combo.bind("<<ComboboxSelected>>", self._on_export_format_selected)
+        self.format_combo.bind("<ButtonPress-1>", self._cancel_option_focus_restore, add="+")
         self.export_button = ttk.Button(
             export_group, text="导出已选", style="Primary.TButton", command=self.start_export
         )
@@ -469,6 +499,18 @@ class PhotoSelectorApp:
         self.quality_scale.pack(side="left", padx=(10, 8))
         self.quality_label = ttk.Label(quality_group, text="92", style="Muted.TLabel", width=3)
         self.quality_label.pack(side="left")
+        ttk.Separator(quality_group, orient="vertical").pack(side="left", fill="y", padx=18)
+        ttk.Label(quality_group, text="命名方式", style="Muted.TLabel").pack(side="left")
+        self.naming_combo = ttk.Combobox(
+            quality_group,
+            textvariable=self.export_naming,
+            values=EXPORT_NAMING_MODES,
+            state="readonly",
+            width=15,
+        )
+        self.naming_combo.pack(side="left", padx=(10, 0))
+        self.naming_combo.bind("<<ComboboxSelected>>", self._on_export_format_selected)
+        self.naming_combo.bind("<ButtonPress-1>", self._cancel_option_focus_restore, add="+")
         ttk.Separator(quality_group, orient="vertical").pack(side="left", fill="y", padx=18)
         ttk.Label(quality_group, textvariable=self.counter_text, style="Muted.TLabel").pack(side="left")
 
@@ -578,9 +620,10 @@ class PhotoSelectorApp:
         )
         self.root.bind("<Escape>", lambda event: self._keyboard_action(event, self._handle_escape))
         self.root.bind("<F11>", lambda event: self._keyboard_action(event, self.toggle_fullscreen))
-        self.root.bind("<Control-o>", lambda _event: self.import_files())
-        self.root.bind("<Control-Shift-O>", lambda _event: self.import_folder())
+        self.root.bind("<Control-KeyPress>", self._on_import_shortcut)
         self.root.bind("<Control-e>", lambda _event: self.start_export())
+        self.root.bind("<Button-1>", self._on_root_click, add="+")
+        self._bind_photo_shortcuts_to_controls(self.root)
 
     def toggle_fullscreen(self) -> None:
         if self.is_fullscreen:
@@ -633,18 +676,60 @@ class PhotoSelectorApp:
             self.fit_image()
 
     def _keyboard_action(self, event: tk.Event, action) -> str | None:
-        if isinstance(event.widget, (ttk.Combobox, ttk.Scale)):
-            return None
-        if event.keysym == "space" and isinstance(event.widget, ttk.Button):
-            return None
         action()
         return "break"
+
+    def _on_import_shortcut(self, event: tk.Event) -> str | None:
+        if event.keysym.casefold() != "o":
+            return None
+        if event.state & self.SHIFT_MASK:
+            self.import_folder()
+        else:
+            self.import_files()
+        return "break"
+
+    def _bind_photo_shortcuts_to_controls(self, parent: tk.Misc) -> None:
+        shortcuts = (
+            ("<Left>", lambda: self.navigate(-1)),
+            ("<Right>", lambda: self.navigate(1)),
+            ("<Up>", self.select_current),
+            ("<Down>", self.deselect_current),
+            ("<space>", self.toggle_selected),
+        )
+        for widget in parent.winfo_children():
+            for sequence, action in shortcuts:
+                widget.bind(
+                    sequence,
+                    lambda event, callback=action: self._keyboard_action(event, callback),
+                )
+            self._bind_photo_shortcuts_to_controls(widget)
 
     def _on_quality_changed(self, value: str) -> None:
         self.quality_label.configure(text=str(round(float(value))))
 
     def _on_export_format_selected(self, _event: tk.Event) -> None:
-        self.root.after_idle(self.canvas.focus_set)
+        self._schedule_option_focus_restore(80)
+
+    def _cancel_option_focus_restore(self, _event: tk.Event | None = None) -> None:
+        if self._option_focus_job is not None:
+            self.root.after_cancel(self._option_focus_job)
+            self._option_focus_job = None
+
+    def _schedule_option_focus_restore(self, delay_ms: int = 0) -> None:
+        self._cancel_option_focus_restore()
+        self._option_focus_job = self.root.after(delay_ms, self._restore_canvas_focus)
+
+    def _restore_canvas_focus(self) -> None:
+        self._option_focus_job = None
+        self.canvas.focus_force()
+
+    def _on_root_click(self, event: tk.Event) -> None:
+        focused = self.root.focus_get()
+        option_widgets = (self.format_combo, self.naming_combo)
+        if focused not in option_widgets or event.widget in option_widgets:
+            return
+        self._cancel_option_focus_restore()
+        self.canvas.focus_force()
 
     def import_files(self) -> None:
         patterns = " ".join(f"*{ext}" for ext in sorted(SUPPORTED_EXTENSIONS))
@@ -729,7 +814,150 @@ class PhotoSelectorApp:
         if selection:
             self.set_current(int(selection[0]))
 
-    def set_current(self, index: int, force: bool = False) -> None:
+    @staticmethod
+    def _image_cache_weight(image: Image.Image) -> int:
+        return image.width * image.height * max(len(image.getbands()), 1)
+
+    def _get_cached_image(self, key: str) -> Image.Image | None:
+        with self._image_cache_lock:
+            image = self._image_cache.get(key)
+            if image is not None:
+                self._image_cache.move_to_end(key)
+            return image
+
+    def _cache_image(self, key: str, image: Image.Image) -> None:
+        weight = self._image_cache_weight(image)
+        if weight > self.IMAGE_CACHE_BYTES:
+            return
+        with self._image_cache_lock:
+            previous = self._image_cache.pop(key, None)
+            if previous is not None:
+                self._image_cache_bytes -= self._image_cache_weight(previous)
+            while self._image_cache and (
+                len(self._image_cache) >= self.IMAGE_CACHE_ITEMS
+                or self._image_cache_bytes + weight > self.IMAGE_CACHE_BYTES
+            ):
+                _, removed = self._image_cache.popitem(last=False)
+                self._image_cache_bytes -= self._image_cache_weight(removed)
+            self._image_cache[key] = image
+            self._image_cache_bytes += weight
+
+    def _clear_image_cache(self) -> None:
+        with self._image_cache_lock:
+            self._image_cache.clear()
+            self._image_cache_bytes = 0
+
+    def _neighbor_indices(self, index: int, preferred_direction: int = 1) -> list[int]:
+        if not self.paths:
+            return []
+        if self.review_mode:
+            indices = self._selected_indices()
+            if index not in indices or len(indices) < 2:
+                return []
+            position = indices.index(index)
+            previous_index = indices[(position - 1) % len(indices)]
+            next_index = indices[(position + 1) % len(indices)]
+        else:
+            if len(self.paths) < 2:
+                return []
+            previous_index = (index - 1) % len(self.paths)
+            next_index = (index + 1) % len(self.paths)
+        candidates = (
+            (previous_index, next_index) if preferred_direction < 0 else (next_index, previous_index)
+        )
+        return list(dict.fromkeys(candidate for candidate in candidates if candidate != index))
+
+    def _cancel_stale_image_loads(self, keep_keys: set[str]) -> None:
+        for key, future in list(self._pending_image_loads.items()):
+            if key in keep_keys:
+                continue
+            if future.cancel():
+                self._pending_image_loads.pop(key, None)
+
+    def _request_image_load(self, path: Path) -> None:
+        key = path_key(path)
+        if self._get_cached_image(key) is not None:
+            return
+        pending = self._pending_image_loads.get(key)
+        if pending is not None:
+            if pending.cancelled():
+                self._pending_image_loads.pop(key, None)
+            else:
+                return
+        generation = self._image_load_generation
+        future = self._image_executor.submit(load_image, path)
+        self._pending_image_loads[key] = future
+        future.add_done_callback(
+            lambda completed, image_key=key, image_path=path, load_generation=generation: self._deliver_image_load(
+                image_key, image_path, load_generation, completed
+            )
+        )
+
+    def _deliver_image_load(
+        self,
+        key: str,
+        path: Path,
+        generation: int,
+        future: Future[Image.Image],
+    ) -> None:
+        self._image_queue.put((key, path, generation, future))
+
+    def _poll_image_queue(self) -> None:
+        self._image_poll_job = None
+        while True:
+            try:
+                key, path, generation, future = self._image_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._complete_image_load(key, path, generation, future)
+        try:
+            self._image_poll_job = self.root.after(30, self._poll_image_queue)
+        except tk.TclError:
+            self._image_poll_job = None
+
+    def _complete_image_load(
+        self,
+        key: str,
+        path: Path,
+        generation: int,
+        future: Future[Image.Image],
+    ) -> None:
+        if self._pending_image_loads.get(key) is future:
+            self._pending_image_loads.pop(key, None)
+        if generation != self._image_load_generation or future.cancelled():
+            return
+        try:
+            image = future.result()
+        except Exception as exc:
+            if any(path_key(candidate) == key for candidate in self.paths):
+                self.failed.add(key)
+            if 0 <= self.current_index < len(self.paths) and path_key(self.paths[self.current_index]) == key:
+                self.current_image = None
+                self._show_load_error(path, str(exc))
+                self._update_actions()
+            return
+
+        self._cache_image(key, image)
+        self.failed.discard(key)
+        if 0 <= self.current_index < len(self.paths) and path_key(self.paths[self.current_index]) == key:
+            self.current_image = image
+            self.fit_mode = True
+            self._schedule_fit_render(fast=True)
+            self._refresh_tree_row(self.current_index)
+            self._update_actions()
+
+    def _schedule_image_loads(self, index: int, preferred_direction: int = 1) -> None:
+        if index < 0 or index >= len(self.paths):
+            return
+        neighbor_indices = self._neighbor_indices(index, preferred_direction)
+        keep_keys = {path_key(self.paths[index])}
+        keep_keys.update(path_key(self.paths[neighbor]) for neighbor in neighbor_indices)
+        self._cancel_stale_image_loads(keep_keys)
+        self._request_image_load(self.paths[index])
+        for neighbor in neighbor_indices:
+            self._request_image_load(self.paths[neighbor])
+
+    def set_current(self, index: int, force: bool = False, preload_direction: int = 1) -> None:
         if not self.paths:
             return
         index = max(0, min(index, len(self.paths) - 1))
@@ -737,20 +965,22 @@ class PhotoSelectorApp:
             return
 
         self._cancel_interactive_render()
+        self._cancel_scheduled_fit()
         self.current_index = index
         path = self.paths[index]
-        try:
-            self.current_image = load_image(path)
-            self.failed.discard(path_key(path))
-        except Exception as exc:
+        key = path_key(path)
+        cached = self._get_cached_image(key)
+        if cached is not None:
+            self.current_image = cached
+            self.failed.discard(key)
+            self._schedule_fit_render(fast=True)
+        else:
             self.current_image = None
-            self.failed.add(path_key(path))
-            self._show_load_error(path, str(exc))
+            self._show_loading_state(path)
 
         self._sync_tree_selection()
         self._refresh_tree_row(index)
-        if self.current_image is not None:
-            self.root.after_idle(self.fit_image)
+        self._schedule_image_loads(index, preload_direction)
         self._update_actions()
 
     def _sync_tree_selection(self) -> None:
@@ -788,9 +1018,9 @@ class PhotoSelectorApp:
             if not indices:
                 return
             position = indices.index(self.current_index) if self.current_index in indices else 0
-            self.set_current(indices[(position + delta) % len(indices)])
+            self.set_current(indices[(position + delta) % len(indices)], preload_direction=delta)
             return
-        self.set_current((self.current_index + delta) % len(self.paths))
+        self.set_current((self.current_index + delta) % len(self.paths), preload_direction=delta)
 
     def toggle_selected(self) -> None:
         if self.current_index < 0:
@@ -842,6 +1072,9 @@ class PhotoSelectorApp:
         ):
             return
         self._cancel_interactive_render()
+        self._cancel_scheduled_fit()
+        self._cancel_all_image_loads()
+        self._clear_image_cache()
         self.paths.clear()
         self.selected.clear()
         self.failed.clear()
@@ -851,6 +1084,25 @@ class PhotoSelectorApp:
         self.tree.delete(*self.tree.get_children())
         self._draw_empty_state()
         self._update_actions()
+
+    def _cancel_all_image_loads(self) -> None:
+        self._image_load_generation += 1
+        for future in self._pending_image_loads.values():
+            future.cancel()
+        self._pending_image_loads.clear()
+
+    def _cancel_scheduled_fit(self) -> None:
+        if self._fit_render_job is not None:
+            self.root.after_cancel(self._fit_render_job)
+            self._fit_render_job = None
+
+    def _schedule_fit_render(self, fast: bool = False) -> None:
+        self._cancel_scheduled_fit()
+        self._fit_render_job = self.root.after_idle(self._run_scheduled_fit, fast)
+
+    def _run_scheduled_fit(self, fast: bool) -> None:
+        self._fit_render_job = None
+        self.fit_image(fast=fast)
 
     def _cancel_interactive_render(self) -> None:
         if self._interactive_render_job is not None:
@@ -875,9 +1127,10 @@ class PhotoSelectorApp:
         self._cancel_interactive_render()
         self._render_image()
 
-    def fit_image(self) -> None:
+    def fit_image(self, fast: bool = False) -> None:
         if self.current_image is None:
             return
+        self._cancel_scheduled_fit()
         self._cancel_interactive_render()
         canvas_width = max(self.canvas.winfo_width(), 1)
         canvas_height = max(self.canvas.winfo_height(), 1)
@@ -891,7 +1144,9 @@ class PhotoSelectorApp:
         self.offset_x = (canvas_width - image_width * self.scale) / 2
         self.offset_y = (canvas_height - image_height * self.scale) / 2
         self.fit_mode = True
-        self._render_image()
+        self._render_image(fast=fast)
+        if fast:
+            self._quality_render_job = self.root.after(120, self._finish_interactive_render)
 
     def _on_mousewheel(self, event: tk.Event) -> str:
         factor = math.pow(1.001, event.delta)
@@ -916,6 +1171,7 @@ class PhotoSelectorApp:
     def _start_pan(self, event: tk.Event) -> None:
         if self.current_image is None:
             return
+        self.canvas.focus_force()
         self.drag_start = (event.x, event.y, self.offset_x, self.offset_y)
         self.canvas.configure(cursor="fleur")
 
@@ -1035,6 +1291,26 @@ class PhotoSelectorApp:
             font=("Microsoft YaHei UI", 10),
         )
 
+    def _show_loading_state(self, path: Path) -> None:
+        self.canvas.delete("all")
+        width = max(self.canvas.winfo_width(), 1)
+        height = max(self.canvas.winfo_height(), 1)
+        self.canvas.create_text(
+            width / 2,
+            height / 2 - 12,
+            text="正在加载图片",
+            fill="#e5e7eb",
+            font=("Microsoft YaHei UI", 16, "bold"),
+        )
+        self.canvas.create_text(
+            width / 2,
+            height / 2 + 24,
+            text=path.name,
+            fill=COLORS["canvas_text"],
+            font=("Microsoft YaHei UI", 10),
+            width=max(width - 120, 200),
+        )
+
     def _show_load_error(self, path: Path, details: str) -> None:
         self.canvas.delete("all")
         width = max(self.canvas.winfo_width(), 1)
@@ -1100,6 +1376,16 @@ class PhotoSelectorApp:
         else:
             self.image_info_text.set("未载入图片")
 
+    def close(self) -> None:
+        self._cancel_interactive_render()
+        self._cancel_scheduled_fit()
+        if self._image_poll_job is not None:
+            self.root.after_cancel(self._image_poll_job)
+            self._image_poll_job = None
+        self._cancel_all_image_loads()
+        self._image_executor.shutdown(wait=False, cancel_futures=True)
+        self.root.destroy()
+
     def enter_review(self) -> None:
         indices = self._selected_indices()
         if not indices:
@@ -1151,6 +1437,7 @@ class PhotoSelectorApp:
             return
         self.export_directory = destination
         output_format = self.export_format.get()
+        naming_mode = self.export_naming.get()
         quality = round(self.export_quality.get())
         self._export_queue = queue.Queue()
         self._export_cancel = threading.Event()
@@ -1159,7 +1446,7 @@ class PhotoSelectorApp:
 
         worker = threading.Thread(
             target=self._export_worker,
-            args=(selected_paths, destination, output_format, quality),
+            args=(selected_paths, destination, output_format, naming_mode, quality),
             daemon=True,
         )
         worker.start()
@@ -1170,6 +1457,7 @@ class PhotoSelectorApp:
         paths: list[Path],
         destination: Path,
         output_format: str,
+        naming_mode: str,
         quality: int,
     ) -> None:
         assert self._export_queue is not None
@@ -1182,7 +1470,7 @@ class PhotoSelectorApp:
                 return
             suffix = source.suffix if output_format == "保持原格式" else EXPORT_FORMATS[output_format][0]
             assert suffix is not None
-            target = unique_output_path(destination, source.stem, suffix)
+            target = unique_output_path(destination, export_stem(source, index, naming_mode), suffix)
             try:
                 export_image(source, target, output_format, quality)
                 exported += 1
