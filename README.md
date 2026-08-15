@@ -67,14 +67,14 @@ A **local-only** Windows photo filtering tool. Import hundreds or thousands of p
 
 ### 免安装发行版（推荐给普通用户）Prebuilt releases (recommended for most users)
 
-前往 [GitHub Releases](https://github.com/sun-3041/Photo-Sorting-Tool/releases/latest) 下载 Windows 64 位免安装版本。两个版本均已包含 Python、Pillow、HEIC/HEIF 与相机 RAW 支持，朋友的电脑无需安装 Python 或任何依赖。
+前往 [GitHub Releases](https://github.com/sun-3041/Photo-Sorting-Tool/releases/latest) 下载 Windows 64 位免安装版本。两个版本均已包含 Python、Pillow、HEIC/HEIF 与相机 RAW 支持，电脑无需安装 Python 或任何依赖。
 
 Download a 64-bit Windows build from [GitHub Releases](https://github.com/sun-3041/Photo-Sorting-Tool/releases/latest). Both packages include Python, Pillow, HEIC/HEIF, and camera RAW support; no Python installation or extra dependencies are required.
 
 | 版本 Package | 使用方式 How to use | 特点 Notes |
 |------|------|------|
-| `PickFrame-v1.0.1-Windows-x64-OneFile.exe` | 下载后直接双击 — download and double-click | 只有一个文件，方便传输；每次启动需要先解压到 Windows 临时目录，因此启动稍慢 — easiest to share, but starts a little slower because it extracts to the Windows temp folder |
-| `PickFrame-v1.0.1-Windows-x64-Portable.zip` | 解压完整压缩包后运行文件夹内的 `PickFrame.exe` — extract the complete archive, then run `PickFrame.exe` | 启动更快、兼容性更稳；必须保留整个文件夹，不能只复制其中的 `.exe` — faster and generally more reliable; keep the whole folder together |
+| `PickFrame-v1.0.2-Windows-x64-OneFile.exe` | 下载后直接双击 — download and double-click | 只有一个文件，方便传输；每次启动需要先解压到 Windows 临时目录，因此启动稍慢 — easiest to share, but starts a little slower because it extracts to the Windows temp folder |
+| `PickFrame-v1.0.2-Windows-x64-Portable.zip` | 解压完整压缩包后运行文件夹内的 `PickFrame.exe` — extract the complete archive, then run `PickFrame.exe` | 启动更快、兼容性更稳；必须保留整个文件夹，不能只复制其中的 `.exe` — faster and generally more reliable; keep the whole folder together |
 
 > 两个版本功能完全相同，均为免安装程序。程序只在内存中缓存正在浏览的少量图片，关闭后自动释放；不会修改、移动或覆盖导入的原图。
 >
@@ -122,9 +122,9 @@ Installs `pillow-heif` (HEIC/HEIF/AVIF) and `rawpy` (camera RAW).
 
 ### 1. 导入图片 Import images
 
-- 点击工具栏「**导入图片**」选择多个文件，或按 `Ctrl+o` — Click **Import Files** in the toolbar, or press `Ctrl+o`
-- 点击「**导入文件夹**」递归导入文件夹及子文件夹内全部图片，或按 `Ctrl+Shift+o` — Click **Import Folder** to import recursively, or press `Ctrl+Shift+o`
-- 字母 `o` 不区分大小写；程序根据是否按住 `Shift` 区分导入图片和导入文件夹 — Letter `o` is case-insensitive; holding `Shift` selects folder import
+- 点击工具栏「**导入图片**」选择多个文件，或按 `Ctrl+i` — Click **Import Files** in the toolbar, or press `Ctrl+i`
+- 点击「**导入文件夹**」递归导入文件夹及子文件夹内全部图片，或按 `Ctrl+o` — Click **Import Folder** to import recursively, or press `Ctrl+o`
+- 字母 `i` 和 `o` 均不区分大小写 — Letters `i` and `o` are case-insensitive
 
 ### 2. 浏览照片 Browse photos
 
@@ -168,8 +168,8 @@ Installs `pillow-heif` (HEIC/HEIF/AVIF) and `rawpy` (camera RAW).
 | `Home` | 跳转到第一张 First image |
 | `End` | 跳转到最后一张 Last image |
 | `Esc` | 普通窗口：恢复适合窗口；全屏：退出全屏 Fit window / exit full-screen |
-| `Ctrl+o` | 导入图片（`o` 不区分大小写） Import files (`o` is case-insensitive) |
-| `Ctrl+Shift+o` | 导入文件夹（`o` 不区分大小写） Import folder (`o` is case-insensitive) |
+| `Ctrl+i` | 导入图片（`i` 不区分大小写） Import files (`i` is case-insensitive) |
+| `Ctrl+o` | 导入文件夹（`o` 不区分大小写） Import folder (`o` is case-insensitive) |
 | `Ctrl+E` | 导出已选（进入复核） Export selected (enter review) |
 | `F11` | 切换全屏查看 Toggle full-screen |
 

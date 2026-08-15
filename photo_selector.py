@@ -291,11 +291,15 @@ class PhotoSelectorApp:
     MAX_SCALE = 16.0
     IMAGE_CACHE_ITEMS = 3
     IMAGE_CACHE_BYTES = 128 * 1024 * 1024
-    SHIFT_MASK = 0x0001
+    WINDOWS_I_KEYCODE = 0x49
     WINDOWS_O_KEYCODE = 0x4F
+    IMPORT_FILES_SHORTCUTS = (
+        "<Control-KeyPress-i>",
+        "<Control-KeyPress-I>",
+    )
     IMPORT_FOLDER_SHORTCUTS = (
-        "<Control-Shift-KeyPress-o>",
-        "<Control-Shift-KeyPress-O>",
+        "<Control-KeyPress-o>",
+        "<Control-KeyPress-O>",
     )
 
     def __init__(self, root: tk.Tk) -> None:
@@ -625,9 +629,10 @@ class PhotoSelectorApp:
         )
         self.root.bind("<Escape>", lambda event: self._keyboard_action(event, self._handle_escape))
         self.root.bind("<F11>", lambda event: self._keyboard_action(event, self.toggle_fullscreen))
+        for sequence in self.IMPORT_FILES_SHORTCUTS:
+            self.root.bind(sequence, self._on_import_files_shortcut)
         for sequence in self.IMPORT_FOLDER_SHORTCUTS:
             self.root.bind(sequence, self._on_import_folder_shortcut)
-        self.root.bind("<Control-KeyPress>", self._on_import_shortcut)
         self.root.bind("<Control-e>", lambda _event: self.start_export())
         self.root.bind("<Button-1>", self._on_root_click, add="+")
         self._bind_photo_shortcuts_to_controls(self.root)
@@ -686,24 +691,23 @@ class PhotoSelectorApp:
         action()
         return "break"
 
-    def _on_import_shortcut(self, event: tk.Event) -> str | None:
-        if not self._is_import_o_key(event):
+    def _on_import_files_shortcut(self, event: tk.Event) -> str | None:
+        if not self._is_import_key(event, "i", self.WINDOWS_I_KEYCODE):
             return None
-        if event.state & self.SHIFT_MASK:
-            return self._on_import_folder_shortcut(event)
         self.import_files()
         return "break"
 
     def _on_import_folder_shortcut(self, event: tk.Event) -> str | None:
-        if not self._is_import_o_key(event):
+        if not self._is_import_key(event, "o", self.WINDOWS_O_KEYCODE):
             return None
         self.import_folder()
         return "break"
 
-    def _is_import_o_key(self, event: tk.Event) -> bool:
+    @staticmethod
+    def _is_import_key(event: tk.Event, letter: str, windows_keycode: int) -> bool:
         keysym = getattr(event, "keysym", "")
         keycode = getattr(event, "keycode", None)
-        return keysym.casefold() == "o" or keycode == self.WINDOWS_O_KEYCODE
+        return keysym.casefold() == letter or keycode == windows_keycode
 
     def _bind_photo_shortcuts_to_controls(self, parent: tk.Misc) -> None:
         shortcuts = (
@@ -714,9 +718,10 @@ class PhotoSelectorApp:
             ("<space>", self.toggle_selected),
         )
         for widget in parent.winfo_children():
+            for sequence in self.IMPORT_FILES_SHORTCUTS:
+                widget.bind(sequence, self._on_import_files_shortcut, add="+")
             for sequence in self.IMPORT_FOLDER_SHORTCUTS:
                 widget.bind(sequence, self._on_import_folder_shortcut, add="+")
-            widget.bind("<Control-KeyPress>", self._on_import_shortcut, add="+")
             for sequence, action in shortcuts:
                 widget.bind(
                     sequence,

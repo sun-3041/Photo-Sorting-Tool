@@ -18,20 +18,22 @@ from photo_selector import (
 
 
 class PhotoSelectorTests(unittest.TestCase):
-    def test_import_shortcuts_support_shift_and_windows_keycode(self) -> None:
+    def test_import_shortcuts_support_i_o_and_windows_keycodes(self) -> None:
         app = object.__new__(PhotoSelectorApp)
         calls = []
         app.import_files = lambda: calls.append("files")
         app.import_folder = lambda: calls.append("folder")
 
-        files_event = SimpleNamespace(keysym="o", keycode=79, state=0)
-        folder_event = SimpleNamespace(keysym="O", keycode=79, state=app.SHIFT_MASK)
-        ime_folder_event = SimpleNamespace(keysym="??", keycode=79, state=app.SHIFT_MASK)
+        files_event = SimpleNamespace(keysym="I", keycode=73, state=0)
+        folder_event = SimpleNamespace(keysym="o", keycode=79, state=0)
+        ime_files_event = SimpleNamespace(keysym="??", keycode=73, state=0)
+        ime_folder_event = SimpleNamespace(keysym="??", keycode=79, state=0)
 
-        self.assertEqual(app._on_import_shortcut(files_event), "break")
+        self.assertEqual(app._on_import_files_shortcut(files_event), "break")
         self.assertEqual(app._on_import_folder_shortcut(folder_event), "break")
-        self.assertEqual(app._on_import_shortcut(ime_folder_event), "break")
-        self.assertEqual(calls, ["files", "folder", "folder"])
+        self.assertEqual(app._on_import_files_shortcut(ime_files_event), "break")
+        self.assertEqual(app._on_import_folder_shortcut(ime_folder_event), "break")
+        self.assertEqual(calls, ["files", "folder", "files", "folder"])
 
     def test_natural_sort(self) -> None:
         paths = [Path("photo10.jpg"), Path("photo2.jpg"), Path("photo1.jpg")]
