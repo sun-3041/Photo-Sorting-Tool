@@ -65,6 +65,21 @@ A **local-only** Windows photo filtering tool. Import hundreds or thousands of p
 
 ## 🚀 安装与启动 Installation & Launch
 
+### 免安装发行版（推荐给普通用户）Prebuilt releases (recommended for most users)
+
+前往 [GitHub Releases](https://github.com/sun-3041/Photo-Sorting-Tool/releases/latest) 下载 Windows 64 位免安装版本。两个版本均已包含 Python、Pillow、HEIC/HEIF 与相机 RAW 支持，朋友的电脑无需安装 Python 或任何依赖。
+
+Download a 64-bit Windows build from [GitHub Releases](https://github.com/sun-3041/Photo-Sorting-Tool/releases/latest). Both packages include Python, Pillow, HEIC/HEIF, and camera RAW support; no Python installation or extra dependencies are required.
+
+| 版本 Package | 使用方式 How to use | 特点 Notes |
+|------|------|------|
+| `PickFrame-v1.0.0-Windows-x64-OneFile.exe` | 下载后直接双击 — download and double-click | 只有一个文件，方便传输；每次启动需要先解压到 Windows 临时目录，因此启动稍慢 — easiest to share, but starts a little slower because it extracts to the Windows temp folder |
+| `PickFrame-v1.0.0-Windows-x64-Portable.zip` | 解压完整压缩包后运行文件夹内的 `PickFrame.exe` — extract the complete archive, then run `PickFrame.exe` | 启动更快、兼容性更稳；必须保留整个文件夹，不能只复制其中的 `.exe` — faster and generally more reliable; keep the whole folder together |
+
+> 两个版本功能完全相同，均为免安装程序。程序只在内存中缓存正在浏览的少量图片，关闭后自动释放；不会修改、移动或覆盖导入的原图。
+>
+> Both builds have the same features and require no installation. The app only keeps a small in-memory browsing cache, releases it on exit, and never modifies, moves, or overwrites imported originals.
+
 ### 环境要求 Requirements
 
 - Windows 10 / 11
@@ -211,6 +226,7 @@ photos_split/
 ├── install_dependencies.bat   # 一键安装基础依赖 Install base deps
 ├── install_optional_formats.bat # 一键安装可选格式支持 Install optional formats
 ├── start.bat                  # 一键启动 Launch
+├── RELEASE_NOTES.md           # 发行版使用说明 Release notes
 ├── LICENSE                    # MIT 许可证 MIT license
 ├── ui_overview.png            # 界面示意图 UI overview diagram
 └── workflow.png               # 操作流程图 Workflow diagram

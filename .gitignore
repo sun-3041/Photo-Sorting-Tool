@@ -23,5 +23,11 @@ Desktop.ini
 # 空目录占位
 .agents/
 
+# PyInstaller 打包输出
+build/
+dist/
+release/
+*.spec
+
 # 本地截图（含个人照片，不上传）
 preview.png
