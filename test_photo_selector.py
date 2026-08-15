@@ -1,10 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
 from photo_selector import (
+    PhotoSelectorApp,
     discover_images,
     export_destination_matches_source_folder,
     export_image,
@@ -16,6 +18,21 @@ from photo_selector import (
 
 
 class PhotoSelectorTests(unittest.TestCase):
+    def test_import_shortcuts_support_shift_and_windows_keycode(self) -> None:
+        app = object.__new__(PhotoSelectorApp)
+        calls = []
+        app.import_files = lambda: calls.append("files")
+        app.import_folder = lambda: calls.append("folder")
+
+        files_event = SimpleNamespace(keysym="o", keycode=79, state=0)
+        folder_event = SimpleNamespace(keysym="O", keycode=79, state=app.SHIFT_MASK)
+        ime_folder_event = SimpleNamespace(keysym="??", keycode=79, state=app.SHIFT_MASK)
+
+        self.assertEqual(app._on_import_shortcut(files_event), "break")
+        self.assertEqual(app._on_import_folder_shortcut(folder_event), "break")
+        self.assertEqual(app._on_import_shortcut(ime_folder_event), "break")
+        self.assertEqual(calls, ["files", "folder", "folder"])
+
     def test_natural_sort(self) -> None:
         paths = [Path("photo10.jpg"), Path("photo2.jpg"), Path("photo1.jpg")]
         self.assertEqual(

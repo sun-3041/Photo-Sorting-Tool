@@ -292,6 +292,11 @@ class PhotoSelectorApp:
     IMAGE_CACHE_ITEMS = 3
     IMAGE_CACHE_BYTES = 128 * 1024 * 1024
     SHIFT_MASK = 0x0001
+    WINDOWS_O_KEYCODE = 0x4F
+    IMPORT_FOLDER_SHORTCUTS = (
+        "<Control-Shift-KeyPress-o>",
+        "<Control-Shift-KeyPress-O>",
+    )
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -620,6 +625,8 @@ class PhotoSelectorApp:
         )
         self.root.bind("<Escape>", lambda event: self._keyboard_action(event, self._handle_escape))
         self.root.bind("<F11>", lambda event: self._keyboard_action(event, self.toggle_fullscreen))
+        for sequence in self.IMPORT_FOLDER_SHORTCUTS:
+            self.root.bind(sequence, self._on_import_folder_shortcut)
         self.root.bind("<Control-KeyPress>", self._on_import_shortcut)
         self.root.bind("<Control-e>", lambda _event: self.start_export())
         self.root.bind("<Button-1>", self._on_root_click, add="+")
@@ -680,13 +687,23 @@ class PhotoSelectorApp:
         return "break"
 
     def _on_import_shortcut(self, event: tk.Event) -> str | None:
-        if event.keysym.casefold() != "o":
+        if not self._is_import_o_key(event):
             return None
         if event.state & self.SHIFT_MASK:
-            self.import_folder()
-        else:
-            self.import_files()
+            return self._on_import_folder_shortcut(event)
+        self.import_files()
         return "break"
+
+    def _on_import_folder_shortcut(self, event: tk.Event) -> str | None:
+        if not self._is_import_o_key(event):
+            return None
+        self.import_folder()
+        return "break"
+
+    def _is_import_o_key(self, event: tk.Event) -> bool:
+        keysym = getattr(event, "keysym", "")
+        keycode = getattr(event, "keycode", None)
+        return keysym.casefold() == "o" or keycode == self.WINDOWS_O_KEYCODE
 
     def _bind_photo_shortcuts_to_controls(self, parent: tk.Misc) -> None:
         shortcuts = (
@@ -697,6 +714,9 @@ class PhotoSelectorApp:
             ("<space>", self.toggle_selected),
         )
         for widget in parent.winfo_children():
+            for sequence in self.IMPORT_FOLDER_SHORTCUTS:
+                widget.bind(sequence, self._on_import_folder_shortcut, add="+")
+            widget.bind("<Control-KeyPress>", self._on_import_shortcut, add="+")
             for sequence, action in shortcuts:
                 widget.bind(
                     sequence,

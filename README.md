@@ -73,8 +73,8 @@ Download a 64-bit Windows build from [GitHub Releases](https://github.com/sun-30
 
 | 版本 Package | 使用方式 How to use | 特点 Notes |
 |------|------|------|
-| `PickFrame-v1.0.0-Windows-x64-OneFile.exe` | 下载后直接双击 — download and double-click | 只有一个文件，方便传输；每次启动需要先解压到 Windows 临时目录，因此启动稍慢 — easiest to share, but starts a little slower because it extracts to the Windows temp folder |
-| `PickFrame-v1.0.0-Windows-x64-Portable.zip` | 解压完整压缩包后运行文件夹内的 `PickFrame.exe` — extract the complete archive, then run `PickFrame.exe` | 启动更快、兼容性更稳；必须保留整个文件夹，不能只复制其中的 `.exe` — faster and generally more reliable; keep the whole folder together |
+| `PickFrame-v1.0.1-Windows-x64-OneFile.exe` | 下载后直接双击 — download and double-click | 只有一个文件，方便传输；每次启动需要先解压到 Windows 临时目录，因此启动稍慢 — easiest to share, but starts a little slower because it extracts to the Windows temp folder |
+| `PickFrame-v1.0.1-Windows-x64-Portable.zip` | 解压完整压缩包后运行文件夹内的 `PickFrame.exe` — extract the complete archive, then run `PickFrame.exe` | 启动更快、兼容性更稳；必须保留整个文件夹，不能只复制其中的 `.exe` — faster and generally more reliable; keep the whole folder together |
 
 > 两个版本功能完全相同，均为免安装程序。程序只在内存中缓存正在浏览的少量图片，关闭后自动释放；不会修改、移动或覆盖导入的原图。
 >

@@ -1,14 +1,21 @@
-# PickFrame v1.0.0
+# PickFrame v1.0.1
 
 PickFrame 是一款本地运行的 Windows 图片筛选工具。本发行版已经封装 Python、Pillow、HEIC/HEIF 和相机 RAW 图片支持，无需安装 Python 或其他依赖。
 
 PickFrame is a local Windows photo filtering tool. This release bundles Python, Pillow, HEIC/HEIF, and camera RAW support, so no Python installation or additional dependencies are required.
 
+## 本次修复 Fix in this release
+
+- 修复 `Ctrl+Shift+O` 无法稳定打开“导入文件夹”的问题。
+- 快捷键现在可在按钮、下拉框、图片列表和查看器获得焦点时使用，并兼容中文输入法可能产生的不同按键符号。
+- Fixed `Ctrl+Shift+O` not reliably opening the folder importer.
+- The shortcut now works while buttons, comboboxes, the image list, or the viewer has focus, including alternate key symbols produced by some input methods.
+
 ## 下载版本 Packages
 
 ### 单文件版 One-file
 
-文件：`PickFrame-v1.0.0-Windows-x64-OneFile.exe`
+文件：`PickFrame-v1.0.1-Windows-x64-OneFile.exe`
 
 - 下载后直接双击运行，只需要保留这一个文件。
 - 适合发送给朋友或保存在 U 盘中。
@@ -20,7 +27,7 @@ PickFrame is a local Windows photo filtering tool. This release bundles Python, 
 
 ### 文件夹版 Portable folder
 
-文件：`PickFrame-v1.0.0-Windows-x64-Portable.zip`
+文件：`PickFrame-v1.0.1-Windows-x64-Portable.zip`
 
 - 先完整解压 ZIP，再双击文件夹内的 `PickFrame.exe`。
 - 启动更快，推荐经常使用或需要 HEIC、RAW 格式的用户选择。
